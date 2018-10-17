@@ -194,15 +194,22 @@ function Client.request(self, method, query, timeout)
     local headers = {}
 
     local u = urilib.parse(self.addr)
-    if u["login"] ~= nil then
-        local pass = u["password"]
+    local login, pass = u["login"], u["password"]
+    local host, port = u["host"], u["service"]
+
+    if login then
         if pass == nil then
             pass = ""
         end
-        headers["Authorization"] = "Basic "..digest.base64_encode(u["login"]..":"..pass)
+        headers["Authorization"] = "Basic "..digest.base64_encode(login..":"..pass)
     end
 
-    local url = uri_join("http://", self.addr, "/v2/keys", query)
+    local hp = host
+    if port then
+        hp = host .. ':' .. port
+    end
+
+    local url = uri_join("http://", hp, "/v2/keys", query)
 
     if timeout == nil then
         timeout = self.timeout
