@@ -167,8 +167,8 @@ function error_message(response)
     end
 
     if response.body ~= nil and response.body ~= "" then
-        local data = json.decode(response.body)
-        if data ~= nil and data.errorCode ~= nil and data.message ~= nil then
+        local ok, data = pcall(json.decode, response.body)
+        if ok and data ~= nil and data.errorCode ~= nil and data.message ~= nil then
             -- etcd response
             return data.message.." (code:"..data.errorCode..")"
         end
@@ -461,8 +461,8 @@ function Cluster.restore(self) -- read data from dump file
         local c = fh:read(1024*1024)
         fh:close()
 
-        local data = json.decode(c)
-        if data ~= nil then
+        local ok, data = pcall(json.decode, c)
+        if ok and data ~= nil then
             infof("restored from dump: %s", c)
             self.data = data
         end
@@ -477,14 +477,14 @@ function Cluster.replication_source_from_server(self)
         if has_error(r) then
             errorf("fetch replication source from %s error: %s", self:path("/master/"), error_message(r))
         else
-            local response = json.decode(r.body)
+            local ok, response = pcall(json.decode, r.body)
             local sources = {}
 
-            if response["node"] ~= nil and response["node"]["nodes"] ~= nil then
+            if ok and response["node"] ~= nil and response["node"]["nodes"] ~= nil then
                 for index,node in ipairs(response["node"]["nodes"]) do
                     if node["value"] ~= nil then
-                        local value = json.decode(node["value"])
-                        if value ~= nil and value["addr"] ~= nil then
+                        local ok, value = pcall(json.decode, node["value"])
+                        if ok and value ~= nil and value["addr"] ~= nil then
                             table.insert(sources, value["addr"])
                         end
                     end
