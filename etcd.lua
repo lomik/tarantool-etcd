@@ -9,6 +9,7 @@ local json = require('json')
 local clock = require('clock')
 local uuid = require('uuid')
 local digest = require('digest')
+local math = require('math')
 
 local function debugf(fmt, ...)
     local c = debug.getinfo(2)
@@ -143,6 +144,20 @@ function uri_join(...)
         end
     end
     return url
+end
+
+local function error_timeout_default()
+    return 1
+end
+
+local function error_timeout(t)
+    local def = error_timeout_default()
+    if not t or t < def then t = def end
+
+    fiber.sleep(t)
+
+    if t < 60 then t = (t + math.random(0, 1)) * 2 end
+    return t
 end
 
 -- REQUEST HANDLE FUNCTIONS
@@ -339,6 +354,8 @@ function Client.announce(self, key, value, opts)
         opts.timeout = 5
     end
 
+    local err_timeout = 0
+
     function refresh()
         local set_required = true
 
@@ -347,19 +364,22 @@ function Client.announce(self, key, value, opts)
                 local r = client:set(key, value, {timeout=opts.timeout, ttl=opts.ttl})
                 if has_error(r) then
                     errorf("announce %s set error: %s", key, error_message(r))
-                    fiber.sleep(1)
+                    err_timeout = error_timeout(err_timeout)
                 else
                     set_required = false
                     infof("announce %s set success", key)
                     fiber.sleep(opts.refresh)
+                    err_timeout = 0
                 end
             else -- !set_required
                 local r = client:refresh(key, {timeout=opts.timeout, ttl=opts.ttl})
                 if has_error(r) then
                     errorf("announce %s refresh error: %s", key, error_message(r))
                     set_required = true
+                    err_timeout = error_timeout(err_timeout)
                 else
                     fiber.sleep(opts.refresh)
+                    err_timeout = 0
                 end
             end -- if set_required
 
@@ -472,6 +492,8 @@ function Cluster.restore(self) -- read data from dump file
 end
 
 function Cluster.replication_source_from_server(self)
+    local err_timeout = 0
+
     while true do
         local r = self.client:get(self:path("/master/"))
         if has_error(r) then
@@ -494,7 +516,7 @@ function Cluster.replication_source_from_server(self)
             return sources
         end
 
-        fiber.sleep(1)
+        err_timeout = error_timeout(err_timeout)
     end
 end
 
@@ -511,6 +533,7 @@ function Cluster.bootstrap_replication_source(self)
     -- 4. go to 1.
     local cluster_id = self:path("cluster_id")
 
+    local err_timeout = 0
     while true do
         infof("check %s", cluster_id)
 
@@ -530,7 +553,6 @@ function Cluster.bootstrap_replication_source(self)
             else
                 errorf("master list is empty")
             end
-
         elseif r.status == 404 and self.role == "master" then
             -- not found cluster_id, try to create
             infof("%s not found", cluster_id)
@@ -547,7 +569,7 @@ function Cluster.bootstrap_replication_source(self)
             errorf("check %s failed: %s", cluster_id, error_message(r))
         end
 
-        fiber.sleep(1)
+        err_timeout = error_timeout(err_timeout)
     end
 end
 
@@ -623,11 +645,12 @@ function Cluster.run(self)
     if self.is_bootstrap then
         -- finish bootstrap
         local new_cluster_id = box.space._schema:select{'cluster'}[1][2]
+        local err_timeout = 0
         while true do
             local r = self.client:cas(self:path("cluster_id"), self.bootstrap_tmp_uuid, new_cluster_id)
             if has_error(r) then
                 errorf("bootstrap finish failed: %s", error_message(r))
-                fiber.sleep(1)
+                err_timeout = error_timeout(err_timeout)
             else
                 break
             end
