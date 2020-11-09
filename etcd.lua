@@ -592,7 +592,7 @@ end
 -- dump to file
 -- returns true if changed
 function Cluster.store_replication_source(self, sources)
-    infof("store_replication_source: %s", json.encode(sources))
+    debugf("store_replication_source: %s", json.encode(sources))
     
     table.sort(sources)
 
@@ -678,7 +678,12 @@ function Cluster.run(self)
             
             if self:store_replication_source(sources) then
                 infof("new master: %s", json.encode(sources))
-                box.cfg{replication_source=self:replication_source_to_dsn(sources)}
+                local new_source = self:replication_source_to_dsn(sources)
+                if box.cfg.replication_source then
+                    box.cfg{replication_source=new_source}
+                else
+                    box.cfg{replication=new_source}
+                end
             end
 
             self.client:wait(self:path("/master/"), {recursive=true, timeout=60})
