@@ -458,7 +458,7 @@ function Cluster.save(self) -- backup data to dump file
     local dump_dir = fio.dirname(self.dump)
     local tmp_file = fio.pathjoin(dump_dir, "."..dump_fn)
 
-    local fh = fio.open(tmp_file, {"O_TRUNC", "O_WRONLY", "O_CREAT"})
+    local fh = fio.open(tmp_file, {"O_TRUNC", "O_WRONLY", "O_CREAT"}, tonumber('644',8))
     if fh ~= nil then
         if fh:write(json.encode(self.data)) then
             if fh:fsync() and fh:close() then
