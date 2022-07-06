@@ -45,7 +45,7 @@ function killall()
         if string.sub(fvalue.name, 1, 5) == "etcd:" then
             infof("kill fiber id=%d, name=%s", fid, fvalue.name)
             local f = fiber.find(fid)
-            if f:status() ~= "dead" then
+            if f ~= nil and f:status() ~= "dead" then
                 f:cancel()
             end
         end
